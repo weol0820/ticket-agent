@@ -53,7 +53,11 @@ def init_db() -> None:
 
 
 def create_ticket(title: str, description: str, channel: str = "web") -> dict:
-    """新建一条待处理工单，返回完整记录。"""
+    """新建一条待处理工单，返回完整记录。
+
+    注意：insert 后必须先 commit，再用新连接读取——
+    否则读到的可能是未提交前的旧状态（返回 None）。
+    """
     init_db()
     with get_conn() as conn:
         cur = conn.execute(
@@ -61,7 +65,9 @@ def create_ticket(title: str, description: str, channel: str = "web") -> dict:
             "VALUES (?, ?, ?, ?, ?)",
             (title, description, channel, _now(), _now()),
         )
-        return get_ticket(cur.lastrowid)  # type: ignore[arg-type]
+        ticket_id = cur.lastrowid
+        conn.commit()  # 显式提交，保证随后 get_ticket 的新连接能读到该行
+    return get_ticket(ticket_id)
 
 
 def get_ticket(ticket_id: int) -> dict | None:
