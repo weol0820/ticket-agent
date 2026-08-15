@@ -53,6 +53,7 @@ def build_task_prompt(ticket_id: int, title: str, description: str,
 - 本机 Python 解释器绝对路径：{python_bin}
 - 业务工具目录绝对路径：{tools_dir}
 - 工具调用形式示例：{python_bin} {tools_dir}/ticket_query.py --id {ticket_id}
+- 注意：工具目录路径中可能包含空格，调用时务必用双引号包裹完整脚本路径。
 
 【任务】处理下面这条新工单（工单 id={ticket_id}）：
 标题：{title}
