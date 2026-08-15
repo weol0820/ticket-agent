@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能客服工单处理 Agent</title>
+  <style>
+    :root { --primary:#2563eb; --bg:#f5f7fa; --card:#fff; --border:#e5e7eb; --text:#1f2937; --muted:#6b7280; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+    .layout { display: grid; grid-template-columns: 380px 1fr; gap: 20px; max-width: 1100px; margin: 0 auto; }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+    label { display: block; font-size: 13px; margin: 12px 0 6px; color: var(--text); }
+    input[type=text], textarea { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 14px; font-family: inherit; }
+    textarea { min-height: 110px; resize: vertical; }
+    button { margin-top: 16px; width: 100%; padding: 10px; background: var(--primary); color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; }
+    button:disabled { background: #93c5fd; cursor: not-allowed; }
+    .kv { display: grid; grid-template-columns: 100px 1fr; row-gap: 10px; font-size: 14px; }
+    .kv b { color: var(--muted); font-weight: normal; }
+    .tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; background:#eff6ff; color: var(--primary); margin-right: 6px; }
+    .tag.warn { background:#fef3c7; color:#b45309; }
+    .tag.danger { background:#fee2e2; color:#b91c1c; }
+    .msg { font-size: 13px; margin-top: 12px; white-space: pre-wrap; }
+    .msg.error { color: #b91c1c; }
+    .msg.ok { color: #047857; }
+    .reply { background:#f9fafb; border-left:3px solid var(--primary); padding:10px 12px; border-radius:0 6px 6px 0; margin-top:6px; font-size:14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: normal; background:#f9fafb; }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>🎫 智能客服工单处理 Agent</h1>
+  <div class="sub">DeepSeek Harness 编排 · 工具调用 · 知识库检索 · 结果写回工单库</div>
+
+  <div class="layout">
+    <div class="card">
+      <h2>提交新工单</h2>
+      <label>工单标题</label>
+      <input type="text" id="title" placeholder="例如：付款成功但订单显示未支付">
+      <label>工单内容</label>
+      <textarea id="description" placeholder="粘贴用户的原始描述……"></textarea>
+      <button id="submitBtn" onclick="submitTicket()">交给 Agent 处理</button>
+      <div class="msg" id="statusMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Agent 处理结果</h2>
+      <div class="msg muted" id="resultBox">提交工单后，这里会展示 Agent 的分类、优先级、建议答复与决策理由。</div>
+    </div>
+  </div>
+
+  <div class="card" style="max-width:1100px;margin:20px auto 0;">
+    <h2>工单列表（SQLite 实时数据）</h2>
+    <table>
+      <thead><tr><th>ID</th><th>标题</th><th>分类</th><th>优先级</th><th>分派组</th><th>状态</th></tr></thead>
+      <tbody id="ticketRows"><tr><td colspan="6" class="muted">加载中……</td></tr></tbody>
+    </table>
+  </div>
+
+  <script>
+    async function loadTickets() {
+      const res = await fetch('/api/tickets');
+      const data = await res.json();
+      const rows = data.tickets.map(t => `<tr>
+        <td>${t.id}</td><td>${t.title}</td>
+        <td>${t.category ? `<span class="tag">${t.category}</span>` : '<span class="muted">待处理</span>'}</td>
+        <td>${t.priority ?? '-'}</td>
+        <td>${t.assignee_group ?? '-'}</td><td>${t.status}</td></tr>`).join('');
+      document.getElementById('ticketRows').innerHTML = rows || '<tr><td colspan="6" class="muted">暂无工单，请先初始化示例数据：python tools/seed_demo.py</td></tr>';
+    }
+
+    function renderResult(r) {
+      const t = r.ticket || {};
+      const esc = r.escalate ? '<span class="tag danger">建议升级人工</span>' : '<span class="tag">无需升级</span>';
+      return `<div class="kv">
+        <b>分类</b><div><span class="tag">${t.category ?? '-'}</span>${esc}</div>
+        <b>优先级</b><div>${t.priority ?? '-'} / 10 ${t.priority >= 8 ? '<span class="tag warn">高优先级</span>' : ''}</div>
+        <b>建议分派</b><div>${t.assignee_group ?? '-'}</div>
+        <b>建议答复</b><div class="reply">${t.suggested_reply ?? '-'}</div>
+        <b>决策理由</b><div>${(t.agent_reason ?? '-').replace(/\n/g, '<br>')}</div>
+        <b>会话日志</b><div class="muted">data/sessions/${r.session_id ?? '?'}.jsonl（可审计完整工具调用过程）</div>
+      </div>`;
+    }
+
+    async function submitTicket() {
+      const title = document.getElementById('title').value.trim();
+      const description = document.getElementById('description').value.trim();
+      const btn = document.getElementById('submitBtn');
+      const msg = document.getElementById('statusMsg');
+      const box = document.getElementById('resultBox');
+      if (!title || !description) { msg.className = 'msg error'; msg.textContent = '请填写标题和内容'; return; }
+      btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Agent 正在处理（分类 → 检索知识库 → 评估 → 写回工单库），请稍候……';
+      try {
+        const res = await fetch('/api/tickets', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({title, description})
+        });
+        const data = await res.json();
+        if (data.ok) {
+          msg.className = 'msg ok'; msg.textContent = '✅ ' + data.message;
+          box.innerHTML = renderResult(data);
+        } else {
+          msg.className = 'msg error'; msg.textContent = '⚠️ ' + data.message;
+        }
+      } catch (e) {
+        msg.className = 'msg error'; msg.textContent = '请求失败：' + e;
+      } finally {
+        btn.disabled = false; loadTickets();
+      }
+    }
+
+    loadTickets();
+  </script>
+</body>
+</html>
