@@ -222,4 +222,4 @@ A：工单仍在库中。查看 `data/sessions/<session_id>.jsonl` 定位失败�
 
 ---
 
-*作者：韦志杰（AI Agent 应用开发方向） · 求职作品集项目 1/2*
+*作者：韦志杰（AI Agent 应用开发方向） · 姊妹项目：[resume-screen-agent](https://github.com/weol0820/resume-screen-agent)*
