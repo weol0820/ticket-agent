@@ -210,6 +210,9 @@ A：DeepSeek Harness SDK 的默认运行时组合以持久 bash 作为模型面�
 **Q：可以换成其他模型吗？**
 A：可以。改 `.env` 的 `DSH_MODEL`（如 `deepseek-reasoner`、`deepseek-v4-flash`）；使用 OpenAI 兼容代理时再设置 `DEEPSEEK_BASE_URL`。
 
+**Q：原生 Windows 上能打开页面吗？**
+A：能。页面与离线工具链（`demo_tools.py`）在任何平台都能运行；只有提交 Agent 任务时，页面会友好提示需要 DeepSeek Harness SDK 运行时（官方 wheel 支持 Linux x64/arm64、macOS 14+ arm64），请在 WSL2 中启动完整版。
+
 **Q：知识库怎么扩充？**
 A：直接编辑 `tools/seed_demo.py` 中的 `DEFAULT_KB`（重新执行 seed），或手工维护 `data/knowledge_base.json`。条目格式：`{id, category, question, answer, tags}`。
 
