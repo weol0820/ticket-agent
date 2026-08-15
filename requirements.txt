@@ -1,0 +1,15 @@
+# 本项目 Python 依赖（Python >= 3.10）
+# 安装：pip install -r requirements.txt
+
+fastapi>=0.110
+uvicorn>=0.29
+python-dotenv>=1.0
+jieba>=0.42
+
+# ---------------------------------------------------------------
+# 注意：DeepSeek Harness Python SDK 不放在本文件中，请按 README
+# 「环境准备」单独安装，因为它附带平台相关的运行时二进制：
+#   官方文档：https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/python-sdk.md
+#   发布版：  pip install deepseek-harness-sdk   （Linux x64/arm64、macOS 14+ arm64）
+#   源码版：  uv pip install -e <harness仓库>/python/sdk （官方构建流程见 README）
+# ---------------------------------------------------------------
