@@ -1,0 +1,95 @@
+# DeepSeek Harness 运行时组合（Cordis 配置）
+#
+# 本文件基于官方 Python SDK 示例 minimal.cordis.yml 改造，改动只有两处：
+#   1) persona 从环境变量 DSH_SYSTEM_PROMPT 读取（由 agent/runner.py 注入客服工单 SOP）；
+#   2) models.id 从环境变量 DSH_MODEL 读取（便于在 .env 切换模型）。
+# 其余插件行与官方示例保持一致，插件职责见 README「核心 Agent 设计」。
+#
+# 官方示例来源：
+#   https://github.com/deepseek-ai/deepseek-harness/blob/master/examples/jsonrpc-agent/minimal.cordis.yml
+
+# stdio JSON-RPC 服务：SDK 客户端与运行时通信的唯一通道，缺了它 agent 没有对外接口
+- id: sdk-jsonrpc-server
+  name: '@deepseek-ai/dsh-sdk-jsonrpc-server'
+  config:
+    maxTokensAsSuccess: false
+
+# DeepSeek 大模型适配器：凭据取自 DEEPSEEK_API_KEY（经凭据链解析），
+# 端点优先用 DEEPSEEK_BASE_URL，缺省回落到官方公开端点 https://api.deepseek.com
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek'
+  config:
+    apiKeyEnv: DEEPSEEK_API_KEY
+    streamIdleTimeoutMs: 172800000
+    models:
+      - id: !!js process.env.DSH_MODEL ?? 'deepseek-chat'
+        contextWindow: !!js Number(process.env.DSH_CONTEXT_WINDOW ?? 64000)
+
+# 沙箱提供方 + 策略：本项目让 Agent 直接操作本机工具目录（与官方示例一致）
+- id: sandbox
+  name: '@deepseek-ai/dsh-sandbox-local'
+
+- id: sandbox-policy
+  name: '@deepseek-ai/dsh-sandbox-policy'
+  config:
+    mode: danger-full-access
+    workspaceRoot: !!js process.env.DSH_CWD ?? process.cwd()
+
+# 本地子进程执行器（bash 工具的底层）
+- id: subprocess
+  name: '@deepseek-ai/dsh-subprocess-local'
+
+# 终端与 bash 工具（模型面向的工具之一）
+- id: pty
+  name: '@deepseek-ai/dsh-terminal'
+
+- id: terminal-bash
+  name: '@deepseek-ai/dsh-terminal-bash'
+  config:
+    timeoutMs: 300000
+
+# 本地文件系统提供方（用于加载工作区指令）
+- id: fs-local
+  name: '@deepseek-ai/dsh-fs-local'
+  config:
+    cwd: !!js process.env.DSH_CWD ?? process.cwd()
+
+# Agent 主干：persona 即“客服工单处理 SOP”，由 runner.py 注入
+- id: agent-spine
+  name: '@deepseek-ai/dsh-agent-spine-demo'
+  config:
+    includeHarnessIdentity: false
+    includeRuntimeContext: false
+    persona: !!js process.env.DSH_SYSTEM_PROMPT ?? '你是一名客服工单处理助手。'
+    workspaceContext: false
+    skills:
+      enabled: false
+    toolBash: false
+    toolJobs: false
+
+# 持久 bash 工具：Agent 用它调用 tools/ 下的业务 CLI（状态跨命令保留）
+- id: persistent-bash
+  name: '@deepseek-ai/dsh-tool-bash-persistent'
+  config:
+    timeoutMs: 300000
+    description: |-
+      Run commands in a bash shell
+      * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+      * You don't have access to the internet via this tool.
+      * State is persistent across command calls and discussions with the user.
+      * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.
+      * Please avoid commands that may produce a very large amount of output.
+      * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.
+
+# 文件编辑工具：本项目的 Agent 原则上只读工单库/知识库，保留该工具用于排查
+- id: str-replace-editor
+  name: '@deepseek-ai/dsh-tool-str-replace-editor'
+  config:
+    maxOutputChars: 16000
+
+# JSONL 会话持久化：每次任务的工具调用与模型往返都落盘，便于审计与复盘
+- id: sessions
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js process.env.DSH_SESSION_ROOT ?? './.sessions'
+    compression: none
